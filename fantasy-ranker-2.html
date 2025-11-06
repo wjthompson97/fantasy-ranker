@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fantasy League Ranker</title>
+<style>
+  * { box-sizing: border-box; }
+  body { 
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    padding: 20px; 
+    max-width: 900px; 
+    margin: 0 auto;
+    background: #f5f5f5;
+  }
+  .container {
+    background: white;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  }
+  .team-list { list-style: none; padding: 0; width: 100%; max-width: 400px; }
+  .team-list li { 
+    padding: 12px; 
+    margin: 6px 0; 
+    background: #f8f9fa; 
+    cursor: grab; 
+    border: 2px solid #dee2e6;
+    border-radius: 6px;
+    transition: all 0.2s;
+    user-select: none;
+  }
+  .team-list li:hover { background: #e9ecef; }
+  .team-list li.dragging { opacity: 0.5; cursor: grabbing; }
+  button { 
+    margin: 10px 10px 0 0; 
+    padding: 10px 20px;
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background 0.2s;
+  }
+  button:hover { background: #0056b3; }
+  button:disabled { background: #6c757d; cursor: not-allowed; opacity: 0.6; }
+  button.danger { background: #dc3545; }
+  button.danger:hover { background: #c82333; }
+  button.success { background: #28a745; }
+  button.success:hover { background: #218838; }
+  button.secondary { background: #6c757d; }
+  button.secondary:hover { background: #5a6268; }
+  select, input {
+    padding: 10px;
+    font-size: 14px;
+    border: 2px solid #dee2e6;
+    border-radius: 4px;
+    margin: 10px 0;
+  }
+  select {
+    width: 100%;
+    max-width: 400px;
+  }
+  input {
+    width: 100%;
+    max-width: 380px;
+  }
+  .status-list { list-style: none; padding: 0; }
+  .status-list li { padding: 8px 0; font-size: 15px; }
+  .loading { color: #6c757d; font-style: italic; }
+  .error { color: #721c24; padding: 12px; background: #f8d7da; border-radius: 4px; margin: 10px 0; border-left: 4px solid #dc3545; }
+  .success-msg { color: #155724; padding: 12px; background: #d4edda; border-radius: 4px; margin: 10px 0; border-left: 4px solid #28a745; }
+  .info { color: #004085; padding: 12px; background: #cce5ff; border-radius: 4px; margin: 10px 0; border-left: 4px solid #007bff; }
+  h1 { color: #212529; margin-top: 0; }
+  h2, h3 { color: #495057; }
+  .section { margin: 30px 0; }
+  .admin-controls { 
+    background: #fff3cd; 
+    padding: 20px; 
+    border-radius: 8px; 
+    border: 2px solid #ffc107;
+    margin-bottom: 30px;
+  }
+  .team-editor {
+    background: #e7f3ff;
+    padding: 15px;
+    border-radius: 6px;
+    margin: 15px 0;
+  }
+  .team-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 8px 0;
+    padding: 8px;
+    background: white;
+    border-radius: 4px;
+  }
+  .team-item input {
+    flex: 1;
+    margin: 0;
+  }
+  .team-item button {
+    margin: 0;
+    padding: 6px 12px;
+  }
+  .login-section {
+    text-align: center;
+    padding: 40px 20px;
+  }
+  .login-section input {
+    max-width: 300px;
+    display: block;
+    margin: 10px auto;
+  }
+  .hidden { display: none !important; }
+  
+  @media (max-width: 600px) {
+    body { padding: 10px; }
+    .container { padding: 20px; }
+    button { padding: 8px 16px; font-size: 13px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Admin Login Section -->
+  <div id="admin-login-section" class="login-section hidden">
+    <h2>🔐 Admin Login</h2>
+    <input type="password" id="admin-password" placeholder="Enter admin password">
+    <button onclick="adminLogin()">Login</button>
+    <button class="secondary" onclick="showMainApp()">Back to App</button>
+  </div>
+
+  <!-- Main App -->
+  <div id="main-app">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+      <h1>🏈 Fantasy League Ranker</h1>
+      <button class="secondary" onclick="showAdminLogin()">Admin Login</button>
+    </div>
+
+    <div id="admin-controls" class="admin-controls hidden">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h2>⚙️ Admin Controls</h2>
+        <button class="secondary" onclick="adminLogout()">Logout</button>
+      </div>
+      
+      <div class="team-editor">
+        <h3>Edit Teams</h3>
+        <div id="team-editor-list"></div>
+        <button class="success" onclick="addNewTeam()">+ Add Team</button>
+        <button onclick="saveTeams()">Save Teams</button>
+      </div>
+      
+      <button class="danger" onclick="resetAll()">Reset All Submissions</button>
+      <button onclick="exportCsv()">Export CSV</button>
+      <button class="secondary" onclick="changeAdminPassword()">Change Password</button>
+    </div>
+
+    <div id="submission-section" class="section">
+      <h2>Submit Your Rankings</h2>
+      <label for="team-select"><strong>Select Your Team:</strong></label>
+      <select id="team-select"></select>
+      
+      <div id="ranking-area" class="hidden">
+        <h3>Drag to Rank Teams (Best to Worst):</h3>
+        <p style="color: #6c757d; font-size: 14px;">Click and drag teams to reorder them. Top = Best, Bottom = Worst</p>
+        <ul id="team-rank" class="team-list"></ul>
+        <button id="submit-btn">Submit Rankings</button>
+      </div>
+    </div>
+
+    <div id="status-section" class="section">
+      <h3>📊 Submission Status</h3>
+      <ul id="status-list" class="status-list"></ul>
+    </div>
+
+    <div id="error-message" class="error hidden"></div>
+    <div id="success-message" class="success-msg hidden"></div>
+    <div id="info-message" class="info hidden"></div>
+  </div>
+</div>
+
+<script>
+// Configuration
+const ADMIN_PASSWORD_KEY = 'admin-password';
+const DEFAULT_ADMIN_PASSWORD = 'admin123'; // Change this!
+
+// Default Teams Configuration
+const defaultTeams = [
+  {id:'M1', name:"Tebo's Inc."},
+  {id:'M2', name:"Dab Daddies"},
+  {id:'M3', name:"The Commish"},
+  {id:'M4', name:"Trust The Process"},
+  {id:'M5', name:"GD Football Team"}
+];
+
+let teams = [];
+let submissions = {};
+let isLoading = false;
+let isAdmin = false;
+
+// DOM Elements
+const teamSelect = document.getElementById('team-select');
+const rankList = document.getElementById('team-rank');
+const statusList = document.getElementById('status-list');
+const submitBtn = document.getElementById('submit-btn');
+const rankingArea = document.getElementById('ranking-area');
+const errorMessage = document.getElementById('error-message');
+const successMessage = document.getElementById('success-message');
+const infoMessage = document.getElementById('info-message');
+const teamEditorList = document.getElementById('team-editor-list');
+const adminControls = document.getElementById('admin-controls');
+const adminLoginSection = document.getElementById('admin-login-section');
+const mainApp = document.getElementById('main-app');
+
+// Storage helpers with localStorage fallback
+const storage = {
+  async get(key, shared = false) {
+    if (window.storage) {
+      try {
+        return await window.storage.get(key, shared);
+      } catch (e) {
+        return null;
+      }
+    } else {
+      const value = localStorage.getItem(key);
+      return value ? { key, value, shared } : null;
+    }
+  },
+  
+  async set(key, value, shared = false) {
+    if (window.storage) {
+      try {
+        return await window.storage.set(key, value, shared);
+      } catch (e) {
+        return null;
+      }
+    } else {
+      localStorage.setItem(key, value);
+      return { key, value, shared };
+    }
+  },
+  
+  async delete(key, shared = false) {
+    if (window.storage) {
+      try {
+        return await window.storage.delete(key, shared);
+      } catch (e) {
+        return null;
+      }
+    } else {
+      localStorage.removeItem(key);
+      return { key, deleted: true, shared };
+    }
+  },
+  
+  async list(prefix = '', shared = false) {
+    if (window.storage) {
+      try {
+        return await window.storage.list(prefix, shared);
+      } catch (e) {
+        return { keys: [] };
+      }
+    } else {
+      const keys = Object.keys(localStorage).filter(k => k.startsWith(prefix));
+      return { keys, prefix, shared };
+    }
+  }
+};
+
+// Admin Authentication
+async function initAdminPassword() {
+  const result = await storage.get(ADMIN_PASSWORD_KEY, true);
+  if (!result || !result.value) {
+    await storage.set(ADMIN_PASSWORD_KEY, DEFAULT_ADMIN_PASSWORD, true);
+  }
+}
+
+async function verifyAdminPassword(password) {
+  const result = await storage.get(ADMIN_PASSWORD_KEY, true);
+  return result && result.value === password;
+}
+
+function showAdminLogin() {
+  if (isAdmin) {
+    showError('You are already logged in as admin.');
+    return;
+  }
+  mainApp.classList.add('hidden');
+  adminLoginSection.classList.remove('hidden');
+  document.getElementById('admin-password').value = '';
+}
+
+function showMainApp() {
+  mainApp.classList.remove('hidden');
+  adminLoginSection.classList.add('hidden');
+}
+
+async function adminLogin() {
+  const password = document.getElementById('admin-password').value;
+  if (!password) {
+    alert('Please enter a password.');
+    return;
+  }
+  
+  const isValid = await verifyAdminPassword(password);
+  if (isValid) {
+    isAdmin = true;
+    adminControls.classList.remove('hidden');
+    renderTeamEditor();
+    showMainApp();
+    showSuccess('✅ Admin login successful!');
+  } else {
+    showError('Invalid admin password.');
+  }
+}
+
+function adminLogout() {
+  isAdmin = false;
+  adminControls.classList.add('hidden');
+  showInfo('Admin logged out.');
+}
+
+async function changeAdminPassword() {
+  const newPassword = prompt('Enter new admin password:');
+  if (!newPassword || newPassword.length < 6) {
+    alert('Password must be at least 6 characters.');
+    return;
+  }
+  
+  const confirm = prompt('Confirm new password:');
+  if (newPassword !== confirm) {
+    alert('Passwords do not match.');
+    return;
+  }
+  
+  await storage.set(ADMIN_PASSWORD_KEY, newPassword, true);
+  showSuccess('✅ Admin password changed successfully!');
+}
+
+// Team Management
+async function loadTeams() {
+  try {
+    const result = await storage.get('teams-config', true);
+    if (result && result.value) {
+      teams = JSON.parse(result.value);
+    } else {
+      teams = [...defaultTeams];
+    }
+  } catch (error) {
+    console.log('No teams config found, using defaults');
+    teams = [...defaultTeams];
+  }
+}
+
+async function saveTeamsToStorage() {
+  try {
+    const result = await storage.set('teams-config', JSON.stringify(teams), true);
+    if (!result) {
+      throw new Error('Storage operation failed');
+    }
+    return true;
+  } catch (error) {
+    console.error('Error saving teams:', error);
+    showError('Failed to save teams configuration.');
+    return false;
+  }
+}
+
+async function loadSubmissions() {
+  try {
+    isLoading = true;
+    const keys = await storage.list('submission:', true);
+    submissions = {};
+    
+    if (keys && keys.keys) {
+      for (const key of keys.keys) {
+        const teamId = key.replace('submission:', '');
+        try {
+          const result = await storage.get(key, true);
+          if (result && result.value) {
+            submissions[teamId] = JSON.parse(result.value);
+          }
+        } catch (err) {
+          console.log(`No submission found for ${teamId}`);
+        }
+      }
+    }
+    isLoading = false;
+  } catch (error) {
+    console.error('Error loading submissions:', error);
+    showError('Failed to load submissions. Please refresh the page.');
+    isLoading = false;
+  }
+}
+
+async function saveSubmission(teamId, rankings) {
+  try {
+    const result = await storage.set(`submission:${teamId}`, JSON.stringify(rankings), true);
+    if (!result) {
+      throw new Error('Storage operation failed');
+    }
+    return true;
+  } catch (error) {
+    console.error('Error saving submission:', error);
+    showError('Failed to save submission. Please try again.');
+    return false;
+  }
+}
+
+async function clearAllSubmissions() {
+  try {
+    const keys = await storage.list('submission:', true);
+    if (keys && keys.keys) {
+      for (const key of keys.keys) {
+        await storage.delete(key, true);
+      }
+    }
+    submissions = {};
+    return true;
+  } catch (error) {
+    console.error('Error clearing submissions:', error);
+    showError('Failed to reset submissions.');
+    return false;
+  }
+}
+
+// Message Display Functions
+function showError(message) {
+  errorMessage.textContent = message;
+  errorMessage.classList.remove('hidden');
+  successMessage.classList.add('hidden');
+  infoMessage.classList.add('hidden');
+  setTimeout(() => errorMessage.classList.add('hidden'), 5000);
+}
+
+function showSuccess(message) {
+  successMessage.textContent = message;
+  successMessage.classList.remove('hidden');
+  errorMessage.classList.add('hidden');
+  infoMessage.classList.add('hidden');
+  setTimeout(() => successMessage.classList.add('hidden'), 3000);
+}
+
+function showInfo(message) {
+  infoMessage.textContent = message;
+  infoMessage.classList.remove('hidden');
+  errorMessage.classList.add('hidden');
+  successMessage.classList.add('hidden');
+  setTimeout(() => infoMessage.classList.add('hidden'), 3000);
+}
+
+// Team Editor Functions
+function renderTeamEditor() {
+  if (!isAdmin) return;
+  
+  teamEditorList.innerHTML = '';
+  teams.forEach((team, index) => {
+    const div = document.createElement('div');
+    div.className = 'team-item';
+    div.innerHTML = `
+      <strong>${team.id}:</strong>
+      <input type="text" value="${team.name}" onchange="updateTeamName(${index}, this.value)">
+      <button class="danger" onclick="removeTeam(${index})">Remove</button>
+    `;
+    teamEditorList.appendChild(div);
+  });
+}
+
+function updateTeamName(index, newName) {
+  teams[index].name = newName.trim();
+}
+
+function removeTeam(index) {
+  if (teams.length <= 2) {
+    alert('You must have at least 2 teams.');
+    return;
+  }
+  if (confirm(`Remove ${teams[index].name}?`)) {
+    teams.splice(index, 1);
+    renderTeamEditor();
+  }
+}
+
+function addNewTeam() {
+  const maxId = Math.max(...teams.map(t => parseInt(t.id.substring(1))));
+  const newId = 'M' + (maxId + 1);
+  teams.push({id: newId, name: `Team ${teams.length + 1}`});
+  renderTeamEditor();
+}
+
+async function saveTeams() {
+  for (const team of teams) {
+    if (!team.name.trim()) {
+      alert('All teams must have a name.');
+      return;
+    }
+  }
+  
+  const success = await saveTeamsToStorage();
+  if (success) {
+    showSuccess('✅ Teams configuration saved successfully!');
+    renderTeams();
+    renderStatus();
+  }
+}
+
+// UI Rendering Functions
+function renderTeams() {
+  teamSelect.innerHTML = '<option value="">--Select Your Team--</option>';
+  teams.forEach(t => {
+    const option = document.createElement('option');
+    option.value = t.id;
+    option.textContent = t.name;
+    teamSelect.appendChild(option);
+  });
+}
+
+function renderRankList() {
+  rankList.innerHTML = '';
+  const selectedTeam = teamSelect.value;
+  
+  teams.forEach(t => {
+    if (t.id === selectedTeam) return;
+    const li = document.createElement('li');
+    li.textContent = t.name;
+    li.dataset.id = t.id;
+    li.draggable = true;
+    rankList.appendChild(li);
+  });
+  
+  enableDragDrop(rankList);
+}
+
+function renderStatus() {
+  statusList.innerHTML = '';
+  
+  if (isLoading) {
+    statusList.innerHTML = '<li class="loading">Loading submissions...</li>';
+    return;
+  }
+  
+  teams.forEach(t => {
+    const li = document.createElement('li');
+    const submitted = submissions[t.id] ? '✅ Submitted' : '⬜ Not submitted';
+    li.textContent = `${t.name}: ${submitted}`;
+    statusList.appendChild(li);
+  });
+}
+
+// Drag and Drop
+function enableDragDrop(list) {
+  let dragEl;
+  
+  list.addEventListener('dragstart', e => {
+    dragEl = e.target;
+    e.target.classList.add('dragging');
+  });
+  
+  list.addEventListener('dragend', e => {
+    e.target.classList.remove('dragging');
+  });
+  
+  list.addEventListener('dragover', e => {
+    e.preventDefault();
+    const afterEl = getDragAfterElement(list, e.clientY);
+    if (afterEl == null) {
+      list.appendChild(dragEl);
+    } else {
+      list.insertBefore(dragEl, afterEl);
+    }
+  });
+}
+
+function getDragAfterElement(container, y) {
+  const draggableEls = [...container.querySelectorAll('li:not(.dragging)')];
+  return draggableEls.reduce((closest, child) => {
+    const box = child.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > closest.offset) {
+      return {offset: offset, element: child};
+    }
+    return closest;
+  }, {offset: -Infinity}).element;
+}
+
+// Event Handlers
+submitBtn.addEventListener('click', async () => {
+  const teamId = teamSelect.value;
+  
+  if (!teamId) {
+    alert('Please select your team first.');
+    return;
+  }
+  
+  if (submissions[teamId]) {
+    alert('You have already submitted your rankings!');
+    return;
+  }
+  
+  const rankOrder = [...rankList.children].map(li => li.dataset.id);
+  
+  if (rankOrder.length === 0) {
+    alert('Please rank at least one team.');
+    return;
+  }
+  
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Submitting...';
+  
+  const success = await saveSubmission(teamId, rankOrder);
+  
+  if (success) {
+    submissions[teamId] = rankOrder;
+    showSuccess('✅ Rankings submitted successfully!');
+    renderStatus();
+  } else {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Submit Rankings';
+  }
+});
+
+teamSelect.addEventListener('change', () => {
+  const teamId = teamSelect.value;
+  
+  if (teamId) {
+    rankingArea.classList.remove('hidden');
+    renderRankList();
+    
+    if (submissions[teamId]) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Already Submitted';
+    } else {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Submit Rankings';
+    }
+  } else {
+    rankingArea.classList.add('hidden');
+  }
+});
+
+// Admin Functions
+async function resetAll() {
+  if (!confirm('Are you sure you want to reset ALL submissions? This cannot be undone.')) {
+    return;
+  }
+  
+  const success = await clearAllSubmissions();
+  if (success) {
+    showSuccess('All submissions have been reset.');
+    teamSelect.value = '';
+    rankingArea.classList.add('hidden');
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Submit Rankings';
+    await loadSubmissions();
+    renderStatus();
+  }
+}
+
+function exportCsv() {
+  if (Object.keys(submissions).length === 0) {
+    alert('No submissions to export.');
+    return;
+  }
+  
+  // Create header row with rank numbers
+  const headerRow = ['Submitter'];
+  for (let i = 1; i <= teams.length; i++) {
+    headerRow.push(`Rank ${i}`);
+  }
+  const rows = [headerRow];
+  
+  // Add each submission with team names in rank order
+  for (const [submitter, ranks] of Object.entries(submissions)) {
+    const submitterName = teams.find(t => t.id === submitter)?.name || submitter;
+    const rankNames = ranks.map(id => teams.find(t => t.id === id)?.name || id);
+    
+    // Fill in any missing ranks with empty strings
+    while (rankNames.length < teams.length) {
+      rankNames.push('');
+    }
+    
+    rows.push([submitterName, ...rankNames]);
+  }
+  
+  const csvContent = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+  const blob = new Blob([csvContent], {type: 'text/csv;charset=utf-8;'});
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'fantasy_rankings_' + new Date().toISOString().split('T')[0] + '.csv';
+  link.click();
+  
+  showSuccess('CSV exported successfully!');
+}
+
+// Initialize
+async function init() {
+  statusList.innerHTML = '<li class="loading">Loading...</li>';
+  
+  await initAdminPassword();
+  await loadTeams();
+  await loadSubmissions();
+  
+  renderTeams();
+  renderStatus();
+}
+
+init();
+</script>
+
+</body>
+</html>
